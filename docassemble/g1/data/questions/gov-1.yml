@@ -1,0 +1,221 @@
+metadata:
+  title: |
+    ESRS-G1-GOV-1
+  short title: |
+    Governance (Gov-1)&#58; The role of the administrative, supervisory and management bodies in relation to business conduct
+  show login: False
+  description: |
+    The objective of this Standard is to specify disclosure requirements which will enable users of the undertaking’s sustainability statements to understand the undertaking’s strategy and approach, processes and procedures as well as its performance in respect of business conduct. This is a sub-section and qualification of ESRS 2-GOV-1 regarding business conduct. If unsure, leave blank. 
+  revision_date: 2024-11-25
+---
+modules:
+  - .post
+---
+features:
+  #css: sds.css # local CSS pointer ## goood tutorial for styling da: https://www.youtube.com/watch?v=6a3sER5MOK8
+  popover trigger: hover # how to display interactive content/hyperlinks
+  bootstrap theme: https://bootswatch.com/5/flatly/bootstrap.min.css
+  navigation: True
+  progress bar: True
+  show progress bar percentage: True
+  progressive: True
+  inverse navbar: False
+  hide navbar: True
+  question help button: True
+---
+field: intro_screen
+question: |
+  Governance (Gov-1)&#58; The role of the administrative, supervisory and management bodies in relation to business conduct
+subquestion: |
+  The objective of this Standard is to specify disclosure requirements which will enable users of the undertaking’s sustainability statements to understand the undertaking’s strategy and approach, processes and procedures as well as its performance in respect of business conduct. This is a sub-section and qualification of ESRS 2-GOV-1 regarding business conduct. If unsure, leave blank.
+
+  To get started, press **Continue**.
+help:
+  label: Help?
+  heading: <BR><h6>Explanation</h6>
+  content: |
+    33.
+    When disclosing information on policies, actions and targets in relation to a sustainability matter that has been assessed to be material the undertaking shall include the information prescribed by all the Disclosure Requirements and datapoints in the topical and sector-specific ESRS related to that matter and in the corresponding Minimum Disclosure Requirement on policies actions and targets required under ESRS 2. If the undertaking cannot disclose the information prescribed by either the Disclosure Requirements and datapoints in the topical or sector-specific ESRS or the Minimum Disclosure Requirements in ESRS 2 on policies actions and targets because it has not adopted the respective policies implemented the respective actions or set the respective targets it shall disclose this to be the case and it may report a timeframe in which it aims to have these in place.
+---
+mandatory: True
+code: |
+  multi_user = True
+  guest_member = None
+
+  # Get query params
+  board_id = url_args.get("board_id", "")
+  survey_id = url_args.get("survey_id", "")
+  django_hostname = os.environ.get("DJANGOHOSTNAME")
+  redirect_url = f"https://{django_hostname}/pages/{board_id}/{survey_id}/completed/?submitted=1"
+  login_url = f"https://{django_hostname}/accounts/login/"
+
+  intro_screen
+  validate_status, validate_content = validate_session({"board_id": board_id, "survey_id": survey_id})
+  if validate_status != 200:
+     invalid_token_screen
+  else:
+    session_info = json.loads(validate_content)
+    guest_member = session_info.get("guest_member")
+    external = session_info.get("external")
+    if guest_member:
+      redirect_url = "https://www.beyondcsrd.se"
+
+  # This is needed so we can filter active interviews on board_id
+  session_tags().add(board_id)
+  session_tags().add(board_id+"__"+survey_id)
+
+  if external:
+    external_organisation_name
+  else:
+    external_organisation_name = None
+
+  survey_data = []
+  survey_data.append({'name': 'What is the role of the administrative, management and supervisory bodies related to business conduct?', 'value': GOV_1_1, 'id': 'GOV_1_1', 'answer_type': 'OPEN'})
+  survey_data.append({'name': 'Please disclose the expertise of administrative, management and supervisory bodies on business conduct matters.', 'value': GOV_1_2, 'id': 'GOV_1_2', 'answer_type': 'OPEN'})
+
+  card_title = 'gov-1'
+  card_description = ''
+  # Description section in the wekan board - need to be composed with markdown and be populated with datapartner_url from the intervfile_uploadsiew.
+  card_title = f"{card_title}"
+  card_description = f"{card_description}"
+  
+  email_title = 'gov-1'
+  #! Email compose for outgoing email.
+  email_body = f"Dear Partner, <br> <br> This is an automated message to confirm we have recieved the form - {email_title}.  <br> <br> Best regards <br> reportAll Team."
+  
+  email_data = [
+      {
+          "subject": email_title,
+          "body": email_body,
+          "recipients": [],
+          "from": "info@reportall.se",
+      }
+  ]
+
+  survey_data_ids = [d['id'] for d in survey_data]
+  survey_analytics = []
+  survey_analytics.append({"id": "G1_compliance_F1", "name": "G1 compliance ratio", "values": ["GOV_1_1", "GOV_1_2"], "dtypes": []})
+
+  survey_analytics_dq = []
+  for sa_idx, sa in enumerate(survey_analytics):
+    if not all([_id in survey_data_ids for _id in sa["values"]]):
+      sd_tag = []
+      sd_found = []
+      drop_sa_ids = []
+      for sd in survey_data:
+        for _id in sa["values"]:
+          if _id in sd["id"]:
+            sd_found.append(sd["id"])
+            tag = sd.get("tag")
+            if tag:
+              sd_tag.append(tag)
+            break
+        if len(sd_found) == len(sa["values"]) and len(sd_found)>0:   # Found all sa values in survey_data
+          dynamic_sa_dict = survey_analytics[sa_idx].copy()
+          dynamic_sa_dict["id"] = dynamic_sa_dict["id"] + f"__DQ{sd_found[0].split('__DQ')[-1]}"
+          dynamic_sa_dict["values"] = sd_found
+          dynamic_sa_dict["tag"] = next(iter(set(sd_tag)), None)
+          survey_analytics_dq.append(dynamic_sa_dict)
+          drop_sa_ids.append(sa_idx)
+          sd_found = []
+          sd_tag = []
+    else:
+      survey_analytics_dq.append(sa)
+
+
+  data = {
+      "board_id": board_id,
+      "survey_id": survey_id,
+      "external_organisation": external_organisation_name,
+      "survey_data": survey_data,
+      "survey_analytics": survey_analytics_dq,
+      "survey_uploads": [],
+      "max_responses": {"count": "1", "date_period": "year", "column_title": "Fiscal year"},
+      "wekan_data": {
+          "card_title": card_title,
+          "card_description": card_description
+  
+      },
+      # "email_data": email_data,
+      "aux_data": [
+      ],
+      "guest_member": guest_member,
+    }
+
+
+  # send data to django
+  final_screen
+  reponse_status_code, response_content = store_interview_results(data)
+  if reponse_status_code == 200:
+    define('error_screen', False) 
+    command('exit', url=redirect_url)
+  else:
+    error_screen
+--- 
+progress: 0
+question: |
+  What is the role of the administrative, management and supervisory bodies related to business conduct? 
+back button: True
+fields:
+  - no label: GOV_1_1
+    datatype: text
+    required: false
+--- 
+progress: 50
+question: |
+  Please disclose the expertise of administrative, management and supervisory bodies on business conduct matters. 
+back button: True
+fields:
+  - no label: GOV_1_2
+    datatype: text
+    required: false
+---
+progress: 0
+back button: True
+question: |
+  Please enter the name of the organisation you represent.
+fields:
+  - Organisation name: external_organisation_name
+    required: false
+
+---
+#! Response report before submission
+progress: 100
+field: final_screen
+back button: True
+question: |
+  Congratulations!
+subquestion: |
+  All questions have been addressed. Press the submit button below to send in your answers.
+continue button label: Submit answers!
+
+---
+#! Response report before submission
+event: error_screen
+prevent going back: True
+question: |
+  Something went wrong when submitting your answers. 
+subquestion: |  
+  Please try again or contact <a href="mailto:info@beyondcsrd.se">info@beyondcsrd.se</a> for help.
+under: |
+  Details: ${ response_content.decode() }
+buttons:
+  Exit: exit
+
+---
+
+event: require_login_screen
+question: |
+  Oops! You have been logged out. Please login again.
+subquestion: |
+  ${ action_button_html(login_url, size='md', color='primary', label='Login', new_window=False) }
+
+---
+
+event: invalid_token_screen
+question: |
+  Your survey token is invalid. Please contact the administrator to request a new url. 
+subquestion: |
+  ${ action_button_html(login_url, size='md', color='primary', label='Login', new_window=False) }
+
+---
