@@ -6,7 +6,7 @@ metadata:
   show login: False
   description: |
     The undertaking shall provide information on incidents of corruption or bribery during the reporting period. All questions marked with * are voluntary. If unsure, leave blank. 
-  revision_date: 2024-11-25
+  revision_date: 2024-12-30
 ---
 modules:
   - .post
@@ -31,46 +31,69 @@ subquestion: |
 
   To get started, press **Continue**.
 ---
+reset:
+  - validate_status
+---
 mandatory: True
 code: |
   multi_user = True
   guest_member = None
 
-  # Get query params
-  board_id = url_args.get("board_id", "")
-  survey_id = url_args.get("survey_id", "")
+  # If not local browser session (device_local) has a token attribute then we look if it has been submitted as a query param
+  # This works together with reset validate_status to ensure that every refresh and browser start token validity is checked
+  if not hasattr(device_local, 'token'):
+    device_local.token = url_args.get("token", "token_arg_not_found")
+  # if "token" in url_args:
+  #   del url_args["token"]
+
   django_hostname = os.environ.get("DJANGOHOSTNAME")
-  redirect_url = f"https://{django_hostname}/pages/{board_id}/{survey_id}/completed/?submitted=1"
   login_url = f"https://{django_hostname}/accounts/login/"
 
   intro_screen
-  validate_status, validate_content = validate_session({"board_id": board_id, "survey_id": survey_id})
+  validate_status, validate_content = validate_session(device_local.token)
   if validate_status != 200:
      invalid_token_screen
   else:
     session_info = json.loads(validate_content)
+    board_id = session_info.get("board_id", "")
+    survey_id = session_info.get("survey_id", "")
     guest_member = session_info.get("guest_member")
     external = session_info.get("external")
-    if guest_member:
-      redirect_url = "https://www.beyondcsrd.se"
-
-  # This is needed so we can filter active interviews on board_id
-  session_tags().add(board_id)
-  session_tags().add(board_id+"__"+survey_id)
+    include_question_ids = session_info.get("include_question_ids")
+    
+  if guest_member:
+    redirect_url = "https://www.beyondcsrd.se"
+  else:
+    redirect_url = f"https://{django_hostname}/pages/{board_id}/{survey_id}/completed/?submitted=1"
 
   if external:
     external_organisation_name
   else:
     external_organisation_name = None
 
+  question_ids = ["G1_4_1", "G1_4_2", "G1_4_3", "G1_4_5", "G1_4_6", "G1_4_7", "G1_4_8", "G1_4_9", "G1_4_10", "G1_4_11", "G1_4_12", "G1_4_13", "G1_4_14", "G1_4_15", "G1_4_16", "G1_4_17", "G1_4_18", "G1_4_19", "G1_4_20", "G1_4_21", "G1_4_22", "G1_4_23", "G1_4_24", "G1_4_25"]
+
+  if include_question_ids: 
+    for question_id in question_ids:
+        if not question_id in include_question_ids:
+          define(question_id, "")
+          
+  else:
+    include_question_ids = question_ids
+    
+
+  # This is needed so we can filter active interviews on board_id
+  session_tags().add(board_id)
+  session_tags().add(board_id+"__"+survey_id)
+
   survey_data = []
-  survey_data.append({'name': 'Does the undertaking have plans and resources to manage material impacts, risks, and opportunities related to to corruption and bribery (see ESRS 2 - MDR-A).', 'value': G1_4_1 if G1_4_1!='None' else '', 'id': 'G1_4_1', 'answer_type': 'Yes/No/Partly', 'dynamic_header':'Please elaborate on the questions below for each key action.', 'dynamic_condition_criteria': 'Yes/Partly'})
+  survey_data.append({'name': 'Does the undertaking have plans and resources to manage material impacts, risks, and opportunities related to to corruption and bribery (see ESRS 2 - MDR-A).', 'value': G1_4_1 if G1_4_1!='None' else '', 'id': 'G1_4_1', 'answer_type': 'Yes/No/Partly', 'included': 'G1_4_1' in include_question_ids})
   if not defined('G1_4_2'):
     define('G1_4_2', '_n/a_')
-  survey_data.append({'name': 'Please disclose reasons for not having adopted actions?', 'value': G1_4_2, 'id': 'G1_4_2', 'answer_type': 'OPEN', 'condition': 'G1_4_1', 'condition_criteria': 'No'})
+  survey_data.append({'name': 'Please disclose reasons for not having adopted actions?', 'value': G1_4_2, 'id': 'G1_4_2', 'answer_type': 'OPEN', 'condition': 'G1_4_1', 'condition_criteria': 'No', 'included': 'G1_4_2' in include_question_ids})
   if not defined('G1_4_3'):
     define('G1_4_3', '_n/a_')
-  survey_data.append({'name': 'When does the undertaking aim to adopt actions?*', 'value': G1_4_3, 'id': 'G1_4_3', 'answer_type': 'OPEN', 'condition': 'G1_4_1', 'condition_criteria': 'No'})
+  survey_data.append({'name': 'When does the undertaking aim to adopt actions?*', 'value': G1_4_3, 'id': 'G1_4_3', 'answer_type': 'OPEN', 'condition': 'G1_4_1', 'condition_criteria': 'No', 'included': 'G1_4_3' in include_question_ids})
   if G1_4_1 in ['Yes', 'Partly']:
     G1_4_4.gather()
   else:
@@ -81,53 +104,53 @@ code: |
   for index, indicator in enumerate(G1_4_4):
     if not indicator.attribute_defined('G1_4_5'):
       indicator.G1_4_5 = '_n/a_'
-    survey_data.append({'name': 'Please provide a short description of the key action.', 'value': indicator.G1_4_5, 'id': f'G1_4_5__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'Please provide a short description of the key action.', 'value': indicator.G1_4_5, 'id': f'G1_4_5__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'included': 'G1_4_5' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_6'):
       indicator.G1_4_6 = '_n/a_'
-    survey_data.append({'name': 'Please describe the undertaking&#x27;s key action.', 'value': indicator.G1_4_6, 'id': f'G1_4_6__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'Please describe the undertaking&#x27;s key action.', 'value': indicator.G1_4_6, 'id': f'G1_4_6__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'included': 'G1_4_6' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_7'):
       indicator.G1_4_7 = '_n/a_'
-    survey_data.append({'name': 'Please explain the scope of the key action.', 'value': indicator.G1_4_7, 'id': f'G1_4_7__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'Please explain the scope of the key action.', 'value': indicator.G1_4_7, 'id': f'G1_4_7__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'included': 'G1_4_7' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_8'):
       indicator.G1_4_8 = '_n/a_'
-    survey_data.append({'name': 'Please disclose the time horizon under which key action is to be completed.', 'value': indicator.G1_4_8, 'id': f'G1_4_8__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'Please disclose the time horizon under which key action is to be completed.', 'value': indicator.G1_4_8, 'id': f'G1_4_8__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'included': 'G1_4_8' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_9'):
       indicator.G1_4_9 = '_n/a_'
-    survey_data.append({'name': 'Please describe key action taken, and its key results, to provide for and cooperate in or support provision of remedy for those harmed by actual material impacts.', 'value': indicator.G1_4_9, 'id': f'G1_4_9__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'Please describe key action taken, and its key results, to provide for and cooperate in or support provision of remedy for those harmed by actual material impacts.', 'value': indicator.G1_4_9, 'id': f'G1_4_9__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'included': 'G1_4_9' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_10'):
       indicator.G1_4_10 = '_n/a_'
-    survey_data.append({'name': 'Please disclose quantitative and qualitative information regarding the progress of actions or action plans disclosed in prior periods.', 'value': indicator.G1_4_10, 'id': f'G1_4_10__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'Please disclose quantitative and qualitative information regarding the progress of actions or action plans disclosed in prior periods.', 'value': indicator.G1_4_10, 'id': f'G1_4_10__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'included': 'G1_4_10' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_11'):
       indicator.G1_4_11 = '_n/a_'
-    survey_data.append({'name': 'Please disclose what type of current and future financial and other resources that are allocated to the action plan (Capex and Opex).', 'value': indicator.G1_4_11, 'id': f'G1_4_11__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'Please disclose what type of current and future financial and other resources that are allocated to the action plan (Capex and Opex).', 'value': indicator.G1_4_11, 'id': f'G1_4_11__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'included': 'G1_4_11' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_12'):
       indicator.G1_4_12 = '_n/a_'
-    survey_data.append({'name': 'Please explain how current financial resources relate to most relevant amounts presented in financial statements.', 'value': indicator.G1_4_12, 'id': f'G1_4_12__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'Please explain how current financial resources relate to most relevant amounts presented in financial statements.', 'value': indicator.G1_4_12, 'id': f'G1_4_12__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'OPEN', 'included': 'G1_4_12' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_13'):
       indicator.G1_4_13 = '_n/a_'
-    survey_data.append({'name': 'What current financial resources does the undertaking have allocated to the action plan? (Capex)', 'value': indicator.G1_4_13, 'id': f'G1_4_13__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'CURRENCY', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'What current financial resources does the undertaking have allocated to the action plan? (Capex)', 'value': indicator.G1_4_13, 'id': f'G1_4_13__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'CURRENCY', 'included': 'G1_4_13' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_14'):
       indicator.G1_4_14 = '_n/a_'
-    survey_data.append({'name': 'What current financial resources does the undertaking have allocated to the action plan? (Opex)', 'value': indicator.G1_4_14, 'id': f'G1_4_14__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'CURRENCY', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'What current financial resources does the undertaking have allocated to the action plan? (Opex)', 'value': indicator.G1_4_14, 'id': f'G1_4_14__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'CURRENCY', 'included': 'G1_4_14' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_15'):
       indicator.G1_4_15 = '_n/a_'
-    survey_data.append({'name': 'What future financial resources does the undertaking have allocated to the action plan? (Capex)', 'value': indicator.G1_4_15, 'id': f'G1_4_15__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'CURRENCY', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'What future financial resources does the undertaking have allocated to the action plan? (Capex)', 'value': indicator.G1_4_15, 'id': f'G1_4_15__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'CURRENCY', 'included': 'G1_4_15' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
     if not indicator.attribute_defined('G1_4_16'):
       indicator.G1_4_16 = '_n/a_'
-    survey_data.append({'name': 'What future financial resources does the undertaking have allocated to the action plan? (Opex)', 'value': indicator.G1_4_16, 'id': f'G1_4_16__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'CURRENCY', 'condition': 'G1_4_1'})
+    survey_data.append({'name': 'What future financial resources does the undertaking have allocated to the action plan? (Opex)', 'value': indicator.G1_4_16, 'id': f'G1_4_16__DQ{index}', 'tag': indicator.name.text, 'answer_type': 'CURRENCY', 'included': 'G1_4_16' in include_question_ids, 'dynamic_group_id': 'G1_4_4', 'dynamic_condition': 'G1_4_1', 'dynamic_condition_criteria': 'Yes/Partly', 'dynamic_header': 'Please elaborate on the questions below for each key action.'})
   if G1_4_1 not in ['Yes', 'Partly']:
     G1_4_4.clear()
-  survey_data.append({'name': 'Please state the number of convictions for violation of anti-corruption and anti-bribery laws?', 'value': G1_4_17, 'id': 'G1_4_17', 'answer_type': 'INTEGER'})
-  survey_data.append({'name': 'Please state the amount of fines for violation of anti-corruption and anti-bribery laws.', 'value': G1_4_18, 'id': 'G1_4_18', 'answer_type': 'CURRENCY'})
-  survey_data.append({'name': 'Has the undertaking engaged in anti-corruption and bribery training interventions?', 'value': G1_4_19 if G1_4_19!='None' else '', 'id': 'G1_4_19', 'answer_type': 'Yes/No/Partly'})
+  survey_data.append({'name': 'Please state the number of convictions for violation of anti-corruption and anti-bribery laws?', 'value': G1_4_17, 'id': 'G1_4_17', 'answer_type': 'INTEGER', 'included': 'G1_4_17' in include_question_ids})
+  survey_data.append({'name': 'Please state the amount of fines for violation of anti-corruption and anti-bribery laws.', 'value': G1_4_18, 'id': 'G1_4_18', 'answer_type': 'CURRENCY', 'included': 'G1_4_18' in include_question_ids})
+  survey_data.append({'name': 'Has the undertaking engaged in anti-corruption and bribery training interventions?', 'value': G1_4_19 if G1_4_19!='None' else '', 'id': 'G1_4_19', 'answer_type': 'Yes/No/Partly', 'included': 'G1_4_19' in include_question_ids})
   if not defined('G1_4_20'):
     define('G1_4_20', '_n/a_')
-  survey_data.append({'name': 'Please disclose the anti-corruption and bribery training interventions.', 'value': G1_4_20, 'id': 'G1_4_20', 'answer_type': 'OPEN_LARGE', 'condition': 'G1_4_19', 'condition_criteria': 'Yes/Partly'})
-  survey_data.append({'name': 'Please disclose the number of confirmed incidents of corruption or bribery.*', 'value': G1_4_21, 'id': 'G1_4_21', 'answer_type': 'INTEGER'})
-  survey_data.append({'name': 'Please describe the nature of confirmed incidents of corruption or bribery, if any.*', 'value': G1_4_22, 'id': 'G1_4_22', 'answer_type': 'OPEN'})
-  survey_data.append({'name': 'How many confirmed incidents in which own workers were dismissed or disciplined for corruption or bribery-related incidents has the undertaking had, if any?*', 'value': G1_4_23, 'id': 'G1_4_23', 'answer_type': 'INTEGER'})
-  survey_data.append({'name': 'How many confirmed incidents relating to contracts with business partners that were terminated or not renewed due to violations related to corruption or bribery did the undertaking experience, if any?*', 'value': G1_4_24, 'id': 'G1_4_24', 'answer_type': 'INTEGER'})
-  survey_data.append({'name': 'Information about details of public legal cases regarding corruption or bribery brought against undertaking and own workers and about outcomes of such cases?*', 'value': G1_4_25, 'id': 'G1_4_25', 'answer_type': 'OPEN'})
+  survey_data.append({'name': 'Please disclose the anti-corruption and bribery training interventions.', 'value': G1_4_20, 'id': 'G1_4_20', 'answer_type': 'OPEN_LARGE', 'condition': 'G1_4_19', 'condition_criteria': 'Yes/Partly', 'included': 'G1_4_20' in include_question_ids})
+  survey_data.append({'name': 'Please disclose the number of confirmed incidents of corruption or bribery.*', 'value': G1_4_21, 'id': 'G1_4_21', 'answer_type': 'INTEGER', 'included': 'G1_4_21' in include_question_ids})
+  survey_data.append({'name': 'Please describe the nature of confirmed incidents of corruption or bribery, if any.*', 'value': G1_4_22, 'id': 'G1_4_22', 'answer_type': 'OPEN', 'included': 'G1_4_22' in include_question_ids})
+  survey_data.append({'name': 'How many confirmed incidents in which own workers were dismissed or disciplined for corruption or bribery-related incidents has the undertaking had, if any?*', 'value': G1_4_23, 'id': 'G1_4_23', 'answer_type': 'INTEGER', 'included': 'G1_4_23' in include_question_ids})
+  survey_data.append({'name': 'How many confirmed incidents relating to contracts with business partners that were terminated or not renewed due to violations related to corruption or bribery did the undertaking experience, if any?*', 'value': G1_4_24, 'id': 'G1_4_24', 'answer_type': 'INTEGER', 'included': 'G1_4_24' in include_question_ids})
+  survey_data.append({'name': 'Information about details of public legal cases regarding corruption or bribery brought against undertaking and own workers and about outcomes of such cases?*', 'value': G1_4_25, 'id': 'G1_4_25', 'answer_type': 'OPEN', 'included': 'G1_4_25' in include_question_ids})
 
   card_title = 'g1-4'
   card_description = ''
@@ -432,7 +455,5 @@ subquestion: |
 event: invalid_token_screen
 question: |
   Your survey token is invalid. Please contact the administrator to request a new url. 
-subquestion: |
-  ${ action_button_html(login_url, size='md', color='primary', label='Login', new_window=False) }
 
 ---
